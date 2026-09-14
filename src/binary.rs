@@ -10,7 +10,8 @@ pub struct BinaryFile{
 
 
 pub struct Instruction {
-    pub bytes: Vec<u8>, // Raw bytes of the instruction
+    pub raw: u128, // Raw bytes of the instruction
+    pub len: usize, // Length of instruction in bits
     pub addr: usize // Address of the instruction in the raw binary
 }
 
@@ -33,8 +34,17 @@ impl BinaryFile {
 
     pub fn new_fixed_width(raw: Vec<u8>, start_addr: usize, end_addr: usize, instruction_width: usize) -> Self {
 
+
+        // ! Not sure at all if this works
         let instructions: Vec<Instruction> = raw.chunks(instruction_width).enumerate().map(|(i, chunk)| Instruction {
-            bytes: chunk.to_vec(),
+            raw: {
+                let mut b: u128 = 0;
+                for (i, byte) in chunk.iter().enumerate() {
+                    b |= (*byte as u128) << (120 - 8 * i);
+                }
+                b
+            },
+            len: instruction_width * 8,
             addr: start_addr + i * instruction_width,
         }).collect();
 

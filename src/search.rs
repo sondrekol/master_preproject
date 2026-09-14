@@ -43,16 +43,18 @@ const CALL_TABLE_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &Bi
 
 
 // ? two distinct problems? 1 is interpreting the data to as a value, then the value could be anything from absolute 
-type AddressInterpreter = fn(operand: Vec<u8>, binary: &BinaryFile, instruction: &Instruction) -> usize;
+type AddressInterpreter = fn(operand: u128, binary: &BinaryFile, instruction: &Instruction) -> usize;
 
 
-const IMM_ABS_ADDRESS_INTERPRETER: AddressInterpreter = |operand: Vec<u8>, binary: &BinaryFile, instruction: &Instruction| {
+const IMM_ABS_ADDRESS_INTERPRETER: AddressInterpreter = |operand: u128, binary: &BinaryFile, instruction: &Instruction| {
     let mut addr: usize = 0;
-    for (i, byte) in operand.iter().enumerate().rev() {
-        addr |= (*byte as usize) << (i * 8);
+    for i in 0..16 {
+        let byte = ((operand >> (120 - 8 * i)) & 0xFF) as u8;
+        addr |= (byte as usize) << (i * 8);
     }
     addr
 };
+
 
 
 fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolve_address: &CallAddressResolver) -> f32 {
