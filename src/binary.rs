@@ -32,11 +32,11 @@ pub trait InstructionModel {
 impl BinaryFile {
 
 
-    pub fn new_fixed_width(raw: Vec<u8>, start_addr: usize, end_addr: usize, instruction_width: usize) -> Self {
+    pub fn new_fixed_width(raw: Vec<u8>, start_addr: usize, end_addr: usize, instruction_width: usize, offset: usize) -> Self {
 
 
         // ! Not sure at all if this works
-        let instructions: Vec<Instruction> = raw.chunks(instruction_width).enumerate().map(|(i, chunk)| Instruction {
+        let instructions: Vec<Instruction> = raw.chunks(instruction_width/8).enumerate().map(|(i, chunk)| Instruction {
             raw: {
                 let mut b: u128 = 0;
                 for (i, byte) in chunk.iter().enumerate() {
@@ -44,15 +44,25 @@ impl BinaryFile {
                 }
                 b
             },
-            len: instruction_width * 8,
-            addr: start_addr + i * instruction_width,
+            len: instruction_width,
+            addr: offset + start_addr + i * instruction_width/8,
         }).collect();
 
         Self {
             instructions,
-            start_addr,
-            end_addr,
+            start_addr: start_addr + offset,
+            end_addr: end_addr + offset,
         }
 
+    }
+}
+
+
+impl Opcode {
+    pub fn new(opcode: u64, opcode_len: usize) -> Self {
+        Self {
+            opcode:opcode << (64 - opcode_len),
+            opcode_len,
+        }
     }
 }

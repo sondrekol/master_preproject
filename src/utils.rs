@@ -18,3 +18,9 @@ pub fn strip_opcode(mut opcodelen: usize, instruction:&Instruction) -> u128 {
     instruction.raw & (u128::MAX >> opcodelen)
 }
 
+// ! needs to determine if we should left align or right align the extracted subinstruction
+// ! also needs better name than subinstruction
+pub fn get_subinstruction(instruction:&Instruction, start_bit: usize, end_bit: usize) -> u128 {
+    let mask: u128 = (u128::MAX >> start_bit) & (u128::MAX << (128 - end_bit));
+    (instruction.raw & mask) >> (128 - end_bit)
+}
