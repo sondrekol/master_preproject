@@ -6,6 +6,8 @@ pub struct BinaryFile{
     pub instructions: Vec<Instruction>,
     pub start_addr: usize,
     pub end_addr: usize,
+    pub fixed_width: Option<usize>,
+    pub offset: usize,
 }
 
 
@@ -52,8 +54,22 @@ impl BinaryFile {
             instructions,
             start_addr: start_addr + offset,
             end_addr: end_addr + offset,
+            fixed_width: Some(instruction_width),
+            offset,
         }
 
+    }
+
+    pub fn addr_to_index(&self, addr: usize) -> Option<usize> {
+        if let Some(fixed_width) = self.fixed_width {
+            if addr < self.start_addr || addr >= self.end_addr {
+                return None;
+            }
+            Some((addr - self.start_addr) / (fixed_width / 8))
+        } else {
+            //TODO: Implement binary search
+            None
+        }
     }
 }
 

@@ -2,9 +2,6 @@ use crate::options::SearchParams;
 use crate::binary::{BinaryFile, Opcode, Instruction};
 use crate::utils::{is_op, strip_opcode};
 
-// ! Result Object?
-
-
 
 // ? Alt det som har med call validity og gjøre er vell egentlig branch/jump validity
 type CallAddressResolver = fn(opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction) -> usize;
@@ -89,6 +86,8 @@ impl Search {
         let mut best:f32 = 0.0;
 
         // ! should have different min/max length for ret and call
+        // ? ret "opcode" should be a single constant value for the whole instruction, however, its more efficient to search for prefixes fully determine the instruction, instead of going trough the entire return
+        // ? perhaps its even possible to pregenerate all possible ret opcodes, which are prefixes in which all remaining bits are fixed
         for call_len in self.params.opcode_minlen..self.params.opcode_maxlen+1 {
             for ret_len in self.params.opcode_minlen..self.params.opcode_maxlen+1 {
                 for call_opcode in 0..(1 << call_len) {
