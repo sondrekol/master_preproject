@@ -94,6 +94,9 @@ pub struct ParamIterator {
 }
 
 
+// TODO: Search space iterator
+// TODO: iterate over all possible parameter combinations: Call opcode(and length), ret opcode(and length), jump target formation method, and potentially endianess
+// TODO: Locking of certain parameters
 impl Iterator for ParamIterator {
     //TODO
     type Item = Opcode;
@@ -103,6 +106,10 @@ impl Iterator for ParamIterator {
         None
     }
 }
+
+
+
+
 
 pub struct Search {
     params: SearchParams,
