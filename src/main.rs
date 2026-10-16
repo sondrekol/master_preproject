@@ -48,14 +48,7 @@ fn main() {
     let offset = usize::from_str_radix(&args.offset.trim_start_matches("0x"), 16)
         .unwrap_or_else(|_| usize::from_str_radix(&args.offset, 10).unwrap());
 
-    //TODO: print arguments for debuggings
-    println!("filepath: {}", args.path);
-    println!("width: {}", args.fixed_width);
-    println!("start_address: {:x}", start_address);
-    println!("code_size: {:x}", code_size);
-    println!("call_opcode_len: {}", args.call_opcode_len);
-    println!("ret_opcode_len: {}", args.ret_opcode_len);
-    println!("offset: {:x}", offset);
+
 
     //TODO: load raw binary
     let bytes = std::fs::read(&args.path).unwrap();

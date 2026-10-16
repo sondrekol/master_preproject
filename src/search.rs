@@ -4,13 +4,10 @@ use crate::utils::{is_op, strip_opcode};
 
 
 // ? Alt det som har med call validity og gjøre er vell egentlig branch/jump validity
-type CallAddressResolver = fn(opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction) -> usize;
+type CallAddressResolver = fn(opcode: &Opcode, instruction: &Instruction) -> usize;
 
-const IMM_ABS_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
-    0
-};
 
-const MIPS_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
+const MIPS_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     let operand_bytes = strip_opcode(opcode.opcode_len, instruction); // ! need to makes this changeable
 
     let addr = operand_bytes >> (128 - instruction.len);
@@ -19,23 +16,52 @@ const MIPS_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFi
     (addr * 4) as usize
 };
 
-//? Where is the sign bit?
-const IMM_REL_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
+const PC_REL_ADDRESS_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
+    let operand_bytes = strip_opcode(opcode.opcode_len, instruction); // ! need to makes this changeable
+
+    let addr = operand_bytes >> (128 - instruction.len);
+
+    // ? byte/word/chunk adressing
+    // ? sign bit?
+    addr as usize + instruction.addr
+};
+
+const ABS_IMM_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
+
+    let operand_bytes = strip_opcode(opcode.opcode_len, instruction); // ! need to makes this changeable
+
+    let addr = operand_bytes >> (128 - instruction.len);
+
+    // ? byte/word/chunk adressing
+    addr as usize
+};
+
+
+
+const REG_ABS_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     0
 };
 
-const REG_ABS_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
+const REG_DISP_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     0
 };
 
-const REG_REL_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
+const REG_REL_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     0
 };
 
-const CALL_TABLE_VALID_ADDR: CallAddressResolver = |opcode: &Opcode, binary: &BinaryFile, instruction: &Instruction| {
+
+
+// ! Likely not feasible, additionally, very few ISAs actually use memory addressing
+const MEM_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     0
 };
 
+const ADDR_RESOLVERS: [CallAddressResolver; 3] = [
+    MIPS_ADDR_RESOLVE,
+    PC_REL_ADDRESS_RESOLVE,
+    ABS_IMM_ADDR_RESOLVE
+];
 
 
 fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolve_address: &CallAddressResolver) -> f32 {
@@ -46,15 +72,7 @@ fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolve_address: &C
     for instruction in &binary.instructions {
         if is_op(opcode, instruction) {
             occurences += 1;
-            let address = resolve_address(opcode, binary, &instruction);
-
-            // ! DEBUG STUFF
-            if (opcode.opcode == 0x0c00000000000000){
-                println!("address: {:016x}", address);
-                println!("instruction raw: {:016x}", instruction.raw);
-                println!("instruction addr: {:016x}", instruction.addr);
-            }
-            // ! DEBUG STUFF
+            let address = resolve_address(opcode, &instruction);
 
             if address <= binary.end_addr && address >= binary.start_addr {
                 valid_adressing += 1;
@@ -66,6 +84,24 @@ fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolve_address: &C
     } else {
         0.0
     };
+}
+
+
+
+
+pub struct ParamIterator {
+
+}
+
+
+impl Iterator for ParamIterator {
+    //TODO
+    type Item = Opcode;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Implement the logic for iterating over parameters here
+        None
+    }
 }
 
 pub struct Search {
@@ -96,7 +132,7 @@ impl Search {
                     let call_score = check_call_validity(
                         &Opcode::new(call_opcode as u64, call_len),
                         &self.binary, 
-                        &MIPS_VALID_ADDR
+                        &MIPS_ADDR_RESOLVE
                     );
 
                     if self.res_call_opcode.is_none() {
@@ -105,7 +141,7 @@ impl Search {
                         if call_score >= best {
                             best = call_score;
                             self.res_call_opcode = Some(Opcode::new(call_opcode as u64, call_len));
-                            println!("best call opcode: {:08x} with call score {}", call_opcode as u64, call_score);
+                            println!("New best call opcode found: {:016x} with score: {}", call_opcode, call_score);
                         }
                     }
 

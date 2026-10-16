@@ -24,3 +24,48 @@ pub fn get_subinstruction(instruction:&Instruction, start_bit: usize, end_bit: u
     let mask: u128 = (u128::MAX >> start_bit) & (u128::MAX << (128 - end_bit));
     (instruction.raw & mask) >> (128 - end_bit)
 }
+
+
+
+
+// ! rename
+pub type blabla = fn(opcode: &Opcode, instruction: &Instruction) -> i32;
+
+
+
+pub const test1:blabla = |opcode: &Opcode, instruction: &Instruction| -> i32 {
+    let operands = strip_opcode(opcode.opcode_len, instruction);
+    // TODO: signbit?
+    // TODO: endianess?
+    // TODO: shift back
+
+    operands as i32
+};
+
+
+//assumes the first bit in the operand part is the sign bit
+pub const direct_signed:blabla = |opcode: &Opcode, instruction: &Instruction| -> i32 {
+    let mut operand = strip_opcode(opcode.opcode_len, instruction);
+
+    let sign_bit = 1 << (128 - opcode.opcode_len - 1);
+    let mut signed_operand:i32;
+
+    if operand & sign_bit != 0 {
+        operand ^= sign_bit;
+        signed_operand = -(operand as i32);
+    }
+    signed_operand = operand as i32;
+    //TODO: handle sign
+
+
+    signed_operand
+};
+
+
+pub const direct_unsigned:blabla = |opcode: &Opcode, instruction: &Instruction| -> i32 {
+    strip_opcode(opcode.opcode_len, instruction) as i32
+};
+
+
+//TODO: endianess?
+//TODO: other idk?
