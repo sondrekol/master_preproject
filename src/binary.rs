@@ -19,6 +19,7 @@ pub struct Instruction {
 
 
 
+#[derive(Clone, Copy, Debug)]
 pub struct Opcode {
     pub opcode: u64, //stored in the topmost bits
     pub opcode_len: usize,

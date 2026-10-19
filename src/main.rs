@@ -16,7 +16,7 @@ struct Command {
     path: String,
     
     #[arg(short, long)]
-    fixed_width: usize,
+    fixed_width: Option<usize>,
     
     #[arg(short, long)]
     start_address: String,
@@ -61,12 +61,24 @@ fn main() {
         opcode_maxlen: args.call_opcode_len,
     };
 
-    let binary_file: BinaryFile = BinaryFile::new_fixed_width(textsection, start_address, start_address+code_size, args.fixed_width, offset);
+    // TODO: variable-width instruction sets. Until then, skip execution when no fixed width is given.
+    let Some(fixed_width) = args.fixed_width else {
+        println!("No --fixed-width given: variable-width search is not implemented yet, skipping.");
+        return;
+    };
+
+    let binary_file: BinaryFile = BinaryFile::new_fixed_width(textsection, start_address, start_address+code_size, fixed_width, offset);
 
     //TODO: algorithm
     let mut search = Search::new(search_params, binary_file);
     search.start();
 
-    println!("{:016x}", search.res_call_opcode.unwrap().opcode);
+    match search.best {
+        Some(best) => println!(
+            "BEST: {} score={} occurrences={} valid_targets={}",
+            best.point, best.call_score, best.occurrences, best.valid_targets
+        ),
+        None => println!("BEST: none (empty search space)"),
+    }
 
 }
