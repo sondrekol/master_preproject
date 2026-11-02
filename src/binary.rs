@@ -13,7 +13,7 @@ pub enum Endianness {
 
 impl fmt::Display for Endianness {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self { Endianness::Big => "big", Endianness::Little => "little" })
+        return write!(f, "{}", match self { Endianness::Big => "big", Endianness::Little => "little" });
     }
 }
 
