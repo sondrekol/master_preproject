@@ -17,15 +17,19 @@ pub fn strip_opcode(opcodelen: usize, instruction:&Instruction) -> u128 {
     instruction.raw & (u128::MAX >> opcodelen)
 }
 
-
-
 pub fn operand_imm(opcode: &Opcode, instruction: &Instruction) -> u128 {
     let operand_bytes = strip_opcode(opcode.opcode_len, instruction);
     operand_bytes >> (128 - instruction.len)
 }
 
+pub fn operand_reg(opcode: &Opcode, instruction: &Instruction, binary: &BinaryFile, window: usize) -> ([u128; 5], usize) { // ? might need to return multiple values to test?
+    let instructions = &binary.instructions;
+    let Some(instr_index) = binary.addr_to_index(instruction.addr) else {return ([0; 5], 0)}; // ! better error handling
 
-pub fn operand_reg(opcode: &Opcode, instruction: &Instruction, binary: &BinaryFile) -> u128 {
-    //TODO: 
-    0
+    for i in 0..window {
+        let move_candidate = &instructions[instr_index - i];
+        //TODO: Figure out operand for the move candidate, and return either as a imm abs or imm rel
+    }
+
+    ([0; 5], 0)
 }

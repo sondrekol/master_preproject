@@ -127,12 +127,19 @@ pub struct AddressResolver {
 
 // Every address interpretation the search tries. Add new resolvers here and the
 // ParamIterator picks them up automatically.
-pub static ADDR_RESOLVERS: [AddressResolver; 5] = [
+pub static ADDR_RESOLVERS: [AddressResolver; 7] = [
     AddressResolver { name: "mips_abs_word",  resolve: MIPS_ADDR_RESOLVE,         chance: MIPS_CHANCE },
     AddressResolver { name: "pc_relative",    resolve: PC_REL_ADDRESS_RESOLVE,    chance: PC_REL_CHANCE },
     AddressResolver { name: "pc_relative_x2", resolve: PC_REL_X2_ADDRESS_RESOLVE, chance: PC_REL_X2_CHANCE },
     AddressResolver { name: "pc_relative_x4", resolve: PC_REL_X4_ADDRESS_RESOLVE, chance: PC_REL_X4_CHANCE },
     AddressResolver { name: "abs_immediate",  resolve: ABS_IMM_ADDR_RESOLVE,      chance: ABS_IMM_CHANCE },
+    AddressResolver { name: "reg_a", resolve: REG_ABS_ADDR_RESOLVE, chance: ABS_IMM_CHANCE },
+    AddressResolver { name: "reg_b", resolve: REG_REL_ADDR_RESOLVE, chance: PC_REL_CHANCE },
+];
+
+pub static REG_ADDR_RESOLVERS: [AddressResolver; 2] = [
+    AddressResolver { name: "reg_a", resolve: REG_ABS_ADDR_RESOLVE, chance: ABS_IMM_CHANCE },
+    AddressResolver { name: "reg_b", resolve: REG_REL_ADDR_RESOLVE, chance: PC_REL_CHANCE },
 ];
 
 /// Byte orders the search tries.
@@ -188,8 +195,10 @@ fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolver: &AddressR
             expected += (resolver.chance)(opcode, instruction, binary);
         }
     }
+    
     operands.sort_unstable();
     operands.dedup();
+
     CallValidity {
         occurrences: occurences,
         valid_targets: valid_adressing,
@@ -198,6 +207,38 @@ fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolver: &AddressR
     }
 }
 
+fn check_call_validity_reg(opcode: &Opcode, binary: &BinaryFile, resolver: &AddressResolver) -> CallValidity {
+    let mut occurences: u32 = 0;
+    let mut valid_adressing: u32 = 0;
+    let mut expected: f64 = 0.0;
+    let mut operands: Vec<u128> = Vec::new();
+    let (start, end) = (binary.start_addr as i128, binary.end_addr as i128);
+
+    // ! There is got to be some smarter way than a linear search
+    //TODO: Handle multiple addresses from resolve, and handle deciding on appropriate move instruction
+        // ! calladdressresolver only returns one address
+    for instruction in &binary.instructions {
+        if is_op(opcode, instruction) {
+            occurences += 1;
+            operands.push(operand_imm(opcode, instruction));
+            let address = (resolver.resolve)(opcode, instruction);
+            if address <= end && address >= start {
+                valid_adressing += 1;
+            }
+            expected += (resolver.chance)(opcode, instruction, binary);
+        }
+    }
+    
+    operands.sort_unstable();
+    operands.dedup();
+
+    CallValidity {
+        occurrences: occurences,
+        valid_targets: valid_adressing,
+        expected_valid: expected,
+        distinct_operands: operands.len() as u32,
+    }
+}
 
 
 /// One coordinate in the parameter space the search runs through.
@@ -335,8 +376,14 @@ impl Search {
         for point in ParamIterator::new(&self.params) {
             // byte orders that were not loaded (see --endian) are skipped
             let Some(binary) = self.binary(point.endian) else { continue };
-            //? might be possible with an early break here if call does not point to in program memory
-            let validity = check_call_validity(&point.call_opcode, binary, point.addr_resolver);
+
+            let validity = if ["reg_a", "reg_b"].contains(&point.addr_resolver.name) {
+                // ! replace with specialzed function for register address resolvers
+                check_call_validity(&point.call_opcode, binary, point.addr_resolver)
+            } else {
+                check_call_validity(&point.call_opcode, binary, point.addr_resolver)
+            };
+
             let call_score = validity.score();
 
             // strictly better score wins; on a tie, more valid targets wins (iteration
