@@ -1,13 +1,15 @@
 use crate::options::SearchParams;
 use crate::binary::{BinaryFile, Endianness, Opcode, Instruction};
+use std::collections::HashMap;
 use std::fmt;
+use std::hash::Hash;
 use crate::utils::{is_op, strip_opcode, operand_imm};
 
 
 // ? Alt det som har med call validity og gjøre er vell egentlig branch/jump validity
 /// Turns a matched instruction into a target address. Signed (i128) so that
 /// negative offsets and addresses below the code section cannot wrap around.
-type CallAddressResolver = fn(opcode: &Opcode, instruction: &Instruction) -> i128;
+type CallAddressResolver = fn(opcode: &Opcode, instruction: &Instruction) -> Vec<i128>;
 
 /// Probability that the target lands inside the code section if the operand bits
 /// were random (uniform over all 2^k values). Used as the chance baseline.
@@ -34,10 +36,10 @@ fn signed_operand(opcode: &Opcode, instruction: &Instruction) -> i128 {
     }
 }
 
-fn pc_relative(opcode: &Opcode, instruction: &Instruction, scale: i128) -> i128 {
+fn pc_relative(opcode: &Opcode, instruction: &Instruction, scale: i128) -> Vec<i128> {
     // ? relative to the instruction itself; some ISAs use PC+4 / PC+8, which only moves
     // ? the target by a few bytes and hardly changes whether it lands in the section
-    instruction.addr as i128 + scale * signed_operand(opcode, instruction)
+    return vec![instruction.addr as i128 + scale * signed_operand(opcode, instruction)];
 }
 
 const PC_REL_ADDRESS_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| pc_relative(opcode, instruction, 1);
@@ -45,29 +47,28 @@ const PC_REL_X2_ADDRESS_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruc
 const PC_REL_X4_ADDRESS_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| pc_relative(opcode, instruction, 4);
 
 const MIPS_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
-    operand_imm(opcode, instruction) as i128 * 4
+    return vec![operand_imm(opcode, instruction) as i128 * 4];
 };
 
 const ABS_IMM_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
     // ? byte/word/chunk adressing
-    operand_imm(opcode, instruction) as i128
+    return vec![operand_imm(opcode, instruction) as i128];
 };
 
 const REG_ABS_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
-    0
+
+    // TODO: obtain k previous instructions
+    // TODO: check which ones point to in memory address
+    // TODO: return those instructions (not just the address) which points to valid address
+    return vec![0];
 };
 
 const REG_DISP_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
-    0
+    return vec![0];
 };
 
 const REG_REL_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
-    0
-};
-
-// ! Likely not feasible, additionally, very few ISAs actually use memory addressing
-const MEM_ADDR_RESOLVE: CallAddressResolver = |opcode: &Opcode, instruction: &Instruction| {
-    0
+    return vec![0];
 };
 
 
@@ -188,7 +189,7 @@ fn check_call_validity(opcode: &Opcode, binary: &BinaryFile, resolver: &AddressR
         if is_op(opcode, instruction) {
             occurences += 1;
             operands.push(operand_imm(opcode, instruction));
-            let address = (resolver.resolve)(opcode, instruction);
+            let address = (resolver.resolve)(opcode, instruction)[0];
             if address <= end && address >= start {
                 valid_adressing += 1;
             }
@@ -211,21 +212,24 @@ fn check_call_validity_reg(opcode: &Opcode, binary: &BinaryFile, resolver: &Addr
     let mut occurences: u32 = 0;
     let mut valid_adressing: u32 = 0;
     let mut expected: f64 = 0.0;
-    let mut operands: Vec<u128> = Vec::new();
+    let mut operands: Vec<u128> = Vec::new(); // ? How to deal with this statistic here?
     let (start, end) = (binary.start_addr as i128, binary.end_addr as i128);
 
-    // ! There is got to be some smarter way than a linear search
-    //TODO: Handle multiple addresses from resolve, and handle deciding on appropriate move instruction
-        // ! calladdressresolver only returns one address
+    // TODO: Keep track of which opcodes have valid addresses, pick the most common
+    let mut opcodes:HashMap<Opcode, usize> = HashMap::new();
+
     for instruction in &binary.instructions {
         if is_op(opcode, instruction) {
             occurences += 1;
             operands.push(operand_imm(opcode, instruction));
-            let address = (resolver.resolve)(opcode, instruction);
-            if address <= end && address >= start {
-                valid_adressing += 1;
+
+            let instructions = (resolver.resolve)(opcode, instruction);
+            for instruction in instructions{
+                // ! opcode may not be the same length as 
+                //TODO: Get opcode
+                //TODO: Get operand
+                //TODO: Update opcodes
             }
-            expected += (resolver.chance)(opcode, instruction, binary);
         }
     }
     
@@ -379,6 +383,7 @@ impl Search {
 
             let validity = if ["reg_a", "reg_b"].contains(&point.addr_resolver.name) {
                 // ! replace with specialzed function for register address resolvers
+                continue;
                 check_call_validity(&point.call_opcode, binary, point.addr_resolver)
             } else {
                 check_call_validity(&point.call_opcode, binary, point.addr_resolver)
@@ -434,13 +439,13 @@ mod tests {
         // 6-bit opcode, 26-bit operand = -1 -> target = pc - 4 with scale 4
         let op = Opcode::new(0b010010, 6);
         let i = insn((0b010010u128 << 26) | 0x3FF_FFFF, 32, 0x1000);
-        assert_eq!(PC_REL_X4_ADDRESS_RESOLVE(&op, &i), 0x1000 - 4);
+        assert_eq!(PC_REL_X4_ADDRESS_RESOLVE(&op, &i)[0], 0x1000 - 4);
         // -4 as a 26-bit field
         let i = insn((0b010010u128 << 26) | (0x400_0000 - 4), 32, 0x1000);
-        assert_eq!(PC_REL_ADDRESS_RESOLVE(&op, &i), 0x1000 - 4);
+        assert_eq!(PC_REL_ADDRESS_RESOLVE(&op, &i)[0], 0x1000 - 4);
         // positive offset
         let i = insn((0b010010u128 << 26) | 0x10, 32, 0x1000);
-        assert_eq!(PC_REL_ADDRESS_RESOLVE(&op, &i), 0x1010);
+        assert_eq!(PC_REL_ADDRESS_RESOLVE(&op, &i)[0], 0x1010);
     }
 
     #[test]
