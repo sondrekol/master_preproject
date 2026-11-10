@@ -1,6 +1,22 @@
 
 
 
+use std::fmt;
+
+/// Byte order used to assemble each instruction slot before the opcode is read
+/// from its top bits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Endianness {
+    Big,
+    Little,
+}
+
+impl fmt::Display for Endianness {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        return write!(f, "{}", match self { Endianness::Big => "big", Endianness::Little => "little" });
+    }
+}
+
 //? only .text or other sections as well?
 pub struct BinaryFile{
     pub instructions: Vec<Instruction>,
@@ -19,6 +35,7 @@ pub struct Instruction {
 
 
 
+#[derive(Clone, Copy, Debug)]
 pub struct Opcode {
     pub opcode: u64, //stored in the topmost bits
     pub opcode_len: usize,
@@ -34,14 +51,20 @@ pub trait InstructionModel {
 impl BinaryFile {
 
 
-    pub fn new_fixed_width(raw: Vec<u8>, start_addr: usize, end_addr: usize, instruction_width: usize, offset: usize) -> Self {
-
-
-        // ! Not sure at all if this works
-        let instructions: Vec<Instruction> = raw.chunks(instruction_width/8).enumerate().map(|(i, chunk)| Instruction {
+    /// Split `raw` into fixed-width slots. Each slot is read in byte order `endian`
+    /// and stored left-aligned in `Instruction::raw` (first bit of the value = bit 127).
+    pub fn new_fixed_width(raw: Vec<u8>, start_addr: usize, end_addr: usize, instruction_width: usize, offset: usize, endian: Endianness) -> Self {
+        let width_bytes = instruction_width / 8;
+        let instructions: Vec<Instruction> = raw.chunks(width_bytes).enumerate().map(|(i, chunk)| Instruction {
             raw: {
+                // a short final chunk is padded with zero bytes at the end of the slot
+                let mut bytes = chunk.to_vec();
+                bytes.resize(width_bytes, 0);
+                if endian == Endianness::Little {
+                    bytes.reverse();
+                }
                 let mut b: u128 = 0;
-                for (i, byte) in chunk.iter().enumerate() {
+                for (i, byte) in bytes.iter().enumerate() {
                     b |= (*byte as u128) << (120 - 8 * i);
                 }
                 b
